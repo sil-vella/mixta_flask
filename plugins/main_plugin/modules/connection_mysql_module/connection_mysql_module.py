@@ -91,18 +91,18 @@ class ConnectionMySqlModule:
         custom_log("✅ Users table verified.")
 
     def _create_user_category_progress_table(self):
-        """Create table to track user levels and points per category."""
+        """Create table to track user levels and points per category and level."""
         query = """
         CREATE TABLE IF NOT EXISTS user_category_progress (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             category VARCHAR(50) NOT NULL,
+            level INT NOT NULL,
             points INT DEFAULT 0,
-            level INT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE (user_id, category)  -- Ensures each user has only one entry per category
+            UNIQUE (user_id, category, level)  -- Ensures each user has only one entry per category & level
         );
         """
         self.execute_query(query)
@@ -115,13 +115,47 @@ class ConnectionMySqlModule:
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             category VARCHAR(50) NOT NULL,
+            level INT NOT NULL,
             guessed_name VARCHAR(100) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE (user_id, category, level, guessed_name) -- Ensures unique guessed names per level
         );
         """
         self.execute_query(query)
         custom_log("✅ Guessed names table verified.")
+
+    def add_guessed_name(self, user_id, category, level, guessed_name):
+        """Add a guessed name for a specific user, category, and level."""
+        query = """
+        INSERT INTO guessed_names (user_id, category, level, guessed_name)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE guessed_name = guessed_name;
+        """
+        self.execute_query(query, (user_id, category, level, guessed_name))
+        custom_log(f"✅ Added guessed name '{guessed_name}' for User {user_id} in {category} Level {level}")
+
+    def get_guessed_names(self, user_id, category, level):
+        """Retrieve guessed names for a user in a specific category and level."""
+        query = "SELECT guessed_name FROM guessed_names WHERE user_id = %s AND category = %s AND level = %s"
+        results = self.fetch_from_db(query, (user_id, category, level))
+        return [row['guessed_name'] for row in results] if results else []
+
+    def update_user_progress(self, user_id, category, level, points):
+        """Update user points and level for a specific category."""
+        query = """
+        INSERT INTO user_category_progress (user_id, category, level, points)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE points = points + %s;
+        """
+        self.execute_query(query, (user_id, category, level, points, points))
+        custom_log(f"✅ Updated progress: User {user_id} | {category} Level {level} | +{points} points")
+
+    def get_user_progress(self, user_id, category, level):
+        """Retrieve user points and level for a specific category."""
+        query = "SELECT points FROM user_category_progress WHERE user_id = %s AND category = %s AND level = %s"
+        result = self.fetch_from_db(query, (user_id, category, level), as_dict=True)
+        return result[0] if result else {"points": 0}
 
     def register_route(self, path, view_func, methods=None, endpoint=None):
         """Register a route with the Flask app."""
@@ -142,3 +176,63 @@ class ConnectionMySqlModule:
         if self.db_connection:
             self.db_connection.close()
             custom_log("🔌 Database connection closed.")
+
+    def get_all_user_data(self, user_id):
+        """Retrieve all user data including profile, category progress, and guessed names."""
+        try:
+            # ✅ Fetch user details
+            user_query = "SELECT id, username, email, created_at FROM users WHERE id = %s"
+            user_data = self.fetch_from_db(user_query, (user_id,), as_dict=True)
+
+            if not user_data:
+                return {"error": f"User with ID {user_id} not found"}, 404
+
+            user_info = user_data[0]  # Extract user details
+
+            # ✅ Fetch category progress (points and levels)
+            progress_query = """
+            SELECT category, level, points FROM user_category_progress WHERE user_id = %s
+            """
+            progress_data = self.fetch_from_db(progress_query, (user_id,), as_dict=True)
+            
+            category_progress = {}
+            for row in progress_data:
+                category = row["category"]
+                level = row["level"]
+                points = row["points"]
+
+                if category not in category_progress:
+                    category_progress[category] = {}
+                category_progress[category][level] = {"points": points}
+
+            # ✅ Fetch guessed names grouped by category and level
+            guessed_query = """
+            SELECT category, level, guessed_name FROM guessed_names WHERE user_id = %s
+            """
+            guessed_data = self.fetch_from_db(guessed_query, (user_id,), as_dict=True)
+
+            guessed_names = {}
+            for row in guessed_data:
+                category = row["category"]
+                level = row["level"]
+                guessed_name = row["guessed_name"]
+
+                if category not in guessed_names:
+                    guessed_names[category] = {}
+                if level not in guessed_names[category]:
+                    guessed_names[category][level] = []
+                
+                guessed_names[category][level].append(guessed_name)
+
+            # ✅ Construct final response
+            user_response = {
+                "user_info": user_info,
+                "category_progress": category_progress,
+                "guessed_names": guessed_names
+            }
+
+            return user_response, 200
+
+        except Exception as e:
+            custom_log(f"❌ Error fetching user data: {e}")
+            return {"error": f"Server error: {str(e)}"}, 500

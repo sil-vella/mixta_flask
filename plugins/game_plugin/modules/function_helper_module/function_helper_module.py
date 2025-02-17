@@ -33,26 +33,31 @@ class FunctionHelperModule:
         self.connection_module.register_route('/get-categories', self.get_categories, methods=['GET'])
         custom_log("🌐 FunctionHelperModule: `/get-categories` route registered.")
 
-    def get_categories(self):
-        """Returns a list of available categories and their respective levels."""
+    def _load_categories_data(self):
+        """Loads categories from YAML as a dictionary (pure Python data)."""
         try:
-            # ✅ Load categories from YAML file
-            with open(CATEGORIES_FILE, "r") as file:
+            with open(CATEGORIES_FILE, "r", encoding="utf-8") as file:
                 categories_data = yaml.safe_load(file)
 
             if not categories_data or "categories" not in categories_data:
-                return jsonify({"error": "No categories found"}), 404
+                return {}
 
-            # ✅ Extract categories and levels
-            categories_response = {
+            # ✅ Extract and convert levels to integers
+            return {
                 category: {"levels": int(data["levels"])}
                 for category, data in categories_data["categories"].items()
             }
 
-            custom_log(f"📜 Available categories: {categories_response}")
-
-            return jsonify({"categories": categories_response}), 200
-
         except Exception as e:
-            custom_log(f"❌ Error retrieving categories: {e}")
-            return jsonify({"error": f"Server error: {str(e)}"}), 500
+            custom_log(f"❌ Error loading categories: {e}")
+            return {}
+
+    def get_categories(self):
+        """Flask route - Returns categories as a JSON response."""
+        categories_response = self._load_categories_data()
+
+        if not categories_response:
+            return jsonify({"error": "No categories found"}), 404
+
+        return jsonify({"categories": categories_response}), 200
+
