@@ -1,0 +1,221 @@
+'1':
+  leonardo_dicaprio:
+    categories:
+      - actors
+    facts:
+      - "I'm the king of the world!"
+      - "He won an Oscar for The Revenant."
+      - "He starred in Titanic and Inception."
+  robert_downey_jr:
+    categories:
+      - actors
+    facts:
+      - "I am Iron Man."
+      - "He played Sherlock Holmes."
+      - "He started acting at the age of five."
+  brad_pitt:
+    categories:
+      - actors
+    facts:
+      - "He won an Oscar for Once Upon a Time in Hollywood."
+      - "He starred in Fight Club and Troy."
+      - "He co-founded the production company Plan B."
+  tom_hanks:
+    categories:
+      - actors
+    facts:
+      - "He won two consecutive Academy Awards for Best Actor."
+      - "He starred in Forrest Gump, Cast Away, and Saving Private Ryan."
+      - "He voiced Woody in Toy Story."
+  scarlett_johansson:
+    categories:
+      - actors
+    facts:
+      - "She played Black Widow in the Marvel Cinematic Universe."
+      - "She was the world's highest-paid actress in 2018 and 2019."
+      - "She started acting at a young age and starred in Lost in Translation."
+  will_smith:
+    categories:
+      - actors
+    facts:
+      - "He started his career as a rapper before moving to acting."
+      - "He starred in The Fresh Prince of Bel-Air."
+      - "He won an Oscar for his role in King Richard."
+  angelina_jolie:
+    categories:
+      - actors
+    facts:
+      - "She starred in Tomb Raider and Maleficent."
+      - "She won an Academy Award for Girl, Interrupted."
+      - "She is known for her humanitarian work with the United Nations."
+  johnny_depp:
+    categories:
+      - actors
+    facts:
+      - "He played Captain Jack Sparrow in Pirates of the Caribbean."
+      - "He started his career on 21 Jump Street."
+      - "He collaborated frequently with director Tim Burton."
+  natalie_portman:
+    categories:
+      - actors
+    facts:
+      - "She won an Oscar for Black Swan."
+      - "She played Padmé Amidala in the Star Wars prequels."
+      - "She graduated from Harvard with a degree in psychology."
+  taylor_swift:
+    categories:
+      - musicians
+    facts:
+      - "She started as a country singer before transitioning to pop."
+      - "She re-recorded her old albums as 'Taylor's Version'."
+      - "She won Album of the Year multiple times at the Grammys."
+  ed_sheeran:
+    categories:
+      - musicians
+    facts:
+      - "He started his career by busking on the streets of London."
+      - "His hit song 'Shape of You' was one of the most streamed songs ever."
+      - "He played a cameo in Game of Thrones."
+  beyonce:
+    categories:
+      - musicians
+    facts:
+      - "She started in the girl group Destiny's Child."
+      - "She became the most awarded female artist in Grammy history."
+      - "She starred in Disney’s live-action The Lion King as Nala."
+  elvis_presley:
+    categories:
+      - musicians
+    facts:
+      - "He was known as the 'King of Rock and Roll'."
+      - "He served in the U.S. Army before returning to music."
+      - "His Graceland home is a major tourist attraction."
+  freddie_mercury:
+    categories:
+      - musicians
+    facts:
+      - "He was the lead singer of Queen."
+      - "He wrote the song 'Bohemian Rhapsody'."
+      - "He was known for his four-octave vocal range."
+  rihanna:
+    categories:
+      - musicians
+    facts:
+      - "She launched her own beauty brand, Fenty Beauty."
+      - "She was born in Barbados and became a global superstar."
+      - "She won the Super Bowl Halftime Show in 2023."
+  eminem:
+    categories:
+      - musicians
+    facts:
+      - "He is known as one of the greatest rappers of all time."
+      - "He starred in the semi-autobiographical movie 8 Mile."
+      - "His album 'The Marshall Mathers LP' broke multiple records."
+  michael_jackson:
+    categories:
+      - musicians
+    facts:
+      - "He was known as the 'King of Pop'."
+      - "He performed the famous Moonwalk dance move."
+      - "His album 'Thriller' is the best-selling album of all time."
+
+'2':
+  johnny_cash:
+    categories:
+      - musicians
+    facts:
+      - "He was known as the 'Man in Black'."
+      - "He performed at prisons, including Folsom Prison."
+      - "His song 'Ring of Fire' became a major hit."
+  kurt_cobain:
+    categories:
+      - musicians
+    facts:
+      - "He was the lead singer of Nirvana."
+      - "He wrote 'Smells Like Teen Spirit'."
+      - "He was considered a voice of the 90s generation."
+  lady_gaga:
+    categories:
+      - musicians
+    facts:
+      - "She is known for her eccentric and creative fashion."
+      - "She won an Oscar for her song 'Shallow' from A Star Is Born."
+      - "Her real name is Stefani Germanotta."
+  bob_marley:
+    categories:
+      - musicians
+    facts:
+      - "He popularized reggae music worldwide."
+      - "His song 'One Love' became an anthem for unity."
+      - "He was a strong advocate for peace and social change."
+  prince:
+    categories:
+      - musicians
+    facts:
+      - "He was a multi-instrumentalist and music icon."
+      - "His hit song 'Purple Rain' became legendary."
+      - "He was known for his mysterious and private lifestyle."
+  whitney_houston:
+    categories:
+      - musicians
+    facts:
+      - "She recorded 'I Will Always Love You', a massive hit."
+      - "She starred in the movie The Bodyguard."
+      - "She won multiple Grammys and sold over 200 million records."
+  david_bowie:
+    categories:
+      - musicians
+    facts:
+      - "He created the alter ego Ziggy Stardust."
+      - "He was known for his futuristic music and fashion."
+      - "His song 'Space Oddity' became a space exploration anthem."
+  elton_john:
+    categories:
+      - musicians
+    facts:
+      - "He wrote the song 'Rocket Man'."
+      - "He composed music for The Lion King."
+      - "He was knighted by Queen Elizabeth II."
+  madonna:
+    categories:
+      - musicians
+    facts:
+      - "She is known as the 'Queen of Pop'."
+      - "She constantly reinvented herself throughout her career."
+      - "Her song 'Like a Prayer' sparked controversy."
+  paul_mccartney:
+    categories:
+      - musicians
+    facts:
+      - "He was a member of The Beatles."
+      - "He wrote many of the Beatles' biggest hits."
+      - "He has continued his solo career for decades."
+  keanu_reeves:
+    categories:
+      - actors
+    facts:
+      - "He starred in The Matrix and John Wick series."
+      - "He is known for his humility and generosity."
+      - "He played bass in a rock band called Dogstar."
+  chris_evans:
+    categories:
+      - actors
+    facts:
+      - "He played Captain America in the Marvel Cinematic Universe."
+      - "He starred in Knives Out and The Gray Man."
+      - "He started acting in TV before transitioning to films."
+  margot_robbie:
+    categories:
+      - actors
+    facts:
+      - "She played Harley Quinn in Suicide Squad."
+      - "She was nominated for an Oscar for I, Tonya."
+      - "She starred in The Wolf of Wall Street."
+  denzel_washington:
+    categories:
+      - actors
+    facts:
+      - "He won two Academy Awards for acting."
+      - "He starred in Training Day and Malcolm X."
+      - "He is also a director and producer."
+
