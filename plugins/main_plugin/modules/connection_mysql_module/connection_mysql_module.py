@@ -115,15 +115,16 @@ class ConnectionMySqlModule:
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             category VARCHAR(50) NOT NULL,
-            level INT NOT NULL,
+            level INT NOT NULL DEFAULT 1,  -- ✅ Ensure level is included
             guessed_name VARCHAR(100) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE (user_id, category, level, guessed_name) -- Ensures unique guessed names per level
+            UNIQUE (user_id, category, level, guessed_name) -- ✅ Ensure unique guessed names per level
         );
         """
         self.execute_query(query)
         custom_log("✅ Guessed names table verified.")
+
 
     def add_guessed_name(self, user_id, category, level, guessed_name):
         """Add a guessed name for a specific user, category, and level."""

@@ -61,36 +61,27 @@ class LoginModule:
         except Exception as e:
             custom_log(f"❌ Error saving guessed names: {e}")
 
-    def _get_guessed_names(self, user_id):
-        """Retrieves guessed names grouped by category & level."""
+    def _save_guessed_names(self, user_id, guessed_names):
+        """Stores guessed names per category & level."""
         try:
-            query = """
-            SELECT category, level, guessed_name 
-            FROM guessed_names WHERE user_id = %s;
+            insert_query = """
+            INSERT INTO guessed_names (user_id, category, level, guessed_name) 
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE guessed_name = guessed_name;
             """
-            results = self.connection_module.fetch_from_db(query, (user_id,), as_dict=True)
 
-            guessed_names = {}
+            for category, levels in guessed_names.items():
+                for level_str, names in levels.items():
+                    level = int(level_str.replace("level_", ""))  # ✅ Convert "level_1" -> 1
 
-            for row in results:
-                category = row["category"]
-                level = f"level_{row['level']}"
-                name = row["guessed_name"]
+                    for name in names:
+                        self.connection_module.execute_query(insert_query, (user_id, category, level, name))
 
-                if category not in guessed_names:
-                    guessed_names[category] = {}
-
-                if level not in guessed_names[category]:
-                    guessed_names[category][level] = []
-
-                guessed_names[category][level].append(name)
-
-            custom_log(f"📜 Retrieved guessed names for user {user_id}: {guessed_names}")
-            return guessed_names
+            custom_log(f"✅ Guessed names saved for user {user_id}: {guessed_names}")
 
         except Exception as e:
-            custom_log(f"❌ Error fetching guessed names: {e}")
-            return {}
+            custom_log(f"❌ Error saving guessed names: {e}")
+
 
     def _get_category_progress(self, user_id):
         """Fetches category-based levels & points."""
@@ -106,7 +97,7 @@ class LoginModule:
         try:
             for category, progress in category_progress.items():
                 points = progress.get("points", 0)
-                level = progress.get("level", 1)
+                level = int(progress.get("level", 1))  # ✅ Ensure level is an integer
 
                 insert_query = """
                 INSERT INTO user_category_progress (user_id, category, level, points)
@@ -119,6 +110,7 @@ class LoginModule:
 
         except Exception as e:
             custom_log(f"❌ Error saving category progress: {e}")
+
 
     def register_user(self):
         """Handles user registration with category-based progress & guessed names."""
@@ -144,10 +136,15 @@ class LoginModule:
             insert_user_query = "INSERT INTO users (username, email, password) VALUES (%s, %s, %s);"
             self.connection_module.execute_query(insert_user_query, (username, email, hashed_password))
 
-            # ✅ Retrieve user ID
             user_id_query = "SELECT id FROM users WHERE email = %s;"
             user_result = self.connection_module.fetch_from_db(user_id_query, (email,))
-            user_id = user_result[0]["id"]
+
+            if not user_result:
+                return jsonify({"error": "User registration failed. No user found after insert."}), 500
+
+            # ✅ Fix: Use index instead of dictionary key if needed
+            user_id = user_result[0][0] if isinstance(user_result[0], tuple) else user_result[0]["id"]
+
 
             # ✅ Save category progress & guessed names
             self._save_category_progress(user_id, category_progress)
@@ -183,3 +180,34 @@ class LoginModule:
         except Exception as e:
             custom_log(f"❌ Error during login: {e}")
             return jsonify({"error": "Server error"}), 500
+
+    def _get_guessed_names(self, user_id):
+        """Retrieves guessed names grouped by category & level."""
+        try:
+            query = """
+            SELECT category, level, guessed_name 
+            FROM guessed_names WHERE user_id = %s;
+            """
+            results = self.connection_module.fetch_from_db(query, (user_id,), as_dict=True)
+
+            guessed_names = {}
+
+            for row in results:
+                category = row["category"]
+                level = f"level_{row['level']}"  # ✅ Convert 1 -> "level_1"
+                name = row["guessed_name"]
+
+                if category not in guessed_names:
+                    guessed_names[category] = {}
+
+                if level not in guessed_names[category]:
+                    guessed_names[category][level] = []
+
+                guessed_names[category][level].append(name)
+
+            custom_log(f"📜 Retrieved guessed names for user {user_id}: {guessed_names}")
+            return guessed_names
+
+        except Exception as e:
+            custom_log(f"❌ Error fetching guessed names: {e}")
+            return {}
