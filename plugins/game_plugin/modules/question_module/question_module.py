@@ -12,6 +12,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # ✅ Dynamically set IMAGE_DIR relative to this file's location
 IMAGE_DIR = os.path.join(BASE_DIR, "celeb_data", "images")
 
+# Define paths for YAML files
+NAMES_YAML_PATH = os.path.join(BASE_DIR, "celeb_data", "categoriesed_celeb_names_for_db_populate.yml")
+DATA_YAML_PATH = os.path.join(BASE_DIR, "celeb_data", "celeb_data.yml")
+
 class QuestionModule:
     def __init__(self, app_manager=None):
         """Initialize QuestionModule and register routes."""
@@ -49,142 +53,114 @@ class QuestionModule:
         self.connection_module.register_route('/images/<path:filename>', serve_image, methods=['GET'])
         custom_log("🖼️ QuestionModule: `/images/<filename>` route registered to serve static images.")
 
-    def load_questions(self):
-        """Load questions from YAML file in the celeb_data subdirectory."""
+    def load_yaml(self, file_path):
+        """Load and return YAML data from a given file path."""
         try:
-            # ✅ Get the directory where `question_module.py` is located
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-
-            # ✅ Build the absolute path to `celeb_data.yml`
-            yaml_path = os.path.join(base_dir, "celeb_data", "celeb_data.yml")
-
-            # ✅ Open and load YAML data with UTF-8 encoding
-            with open(yaml_path, "r", encoding="utf-8") as file:
-                data = yaml.safe_load(file)
-
-            custom_log(f"✅ Questions loaded successfully from {yaml_path}.")
-            return data
-        except UnicodeDecodeError as e:
-            custom_log(f"❌ Encoding error loading YAML: {e}")
-            return None
-        except yaml.YAMLError as e:
-            custom_log(f"❌ YAML syntax error: {e}")
-            return None
+            with open(file_path, "r", encoding="utf-8") as file:
+                return yaml.safe_load(file)
         except Exception as e:
-            custom_log(f"❌ Unexpected error loading YAML from {yaml_path}: {e}")
+            custom_log(f"❌ Error loading YAML from {file_path}: {e}")
             return None
-
 
     def normalize_name(self, name):
         """Normalize a celebrity name for consistent searching."""
-        name = name.lower().strip()  # Convert to lowercase and trim spaces
-        name = re.sub(r'[^\w\s]', '', name)  # Remove special characters except spaces
-        name = name.replace(" ", "_")  # Replace spaces with underscores (for filename matching)
+        name = name.lower().strip()
+        name = name.replace(" ", "_")
         return name
 
     def get_question(self):
-        """Returns a random question with a main celebrity and 3 distractor images."""
+        """Fetch a question using the new `celeb_names.yml` structure and look up facts in `celeb_data.yml`."""
         try:
             custom_log("🔄 Starting get_question request...")
 
-            # ✅ Extract request data from JSON body (Fix)
+            # ✅ Extract request data
             data = request.get_json()
-            level = str(data.get("level", 1))  # Ensure level is a string
-            category = data.get("category", "").lower()  # Retrieve category and lowercase it
-            guessed_list = data.get("guessed_names", [])  # ✅ Extract guessed names list from JSON
-
-            # ✅ Ensure guessed_list is a list of lowercase names
-            if not isinstance(guessed_list, list):
-                guessed_list = []
-            guessed_list = [name.lower() for name in guessed_list]  # Normalize guessed names
+            level = str(data.get("level", 1))  # Convert level to string (since YAML keys are strings)
+            category = data.get("category", "mixed").lower()
+            guessed_list = [name.lower() for name in data.get("guessed_names", [])]
 
             custom_log(f"📥 Received request for category '{category}' at level {level}. Guessed list: {guessed_list}")
 
-            # ✅ Load questions from YAML
-            questions = self.load_questions()
-            if not questions:
-                custom_log("❌ Failed to load questions data.")
-                return jsonify({"error": "Failed to load questions"}), 500
+            # ✅ Load names YAML
+            names_data = self.load_yaml(NAMES_YAML_PATH)
+            if not names_data or level not in names_data:
+                custom_log(f"❌ No data found for level {level}.")
+                return jsonify({"error": f"No data available for level {level}"}), 404
 
-            # ✅ Validate level exists
-            if level not in questions:
-                custom_log(f"❌ No facts available for level {level}")
-                return jsonify({"error": f"No facts available for level {level}"}), 404
-
-            # ✅ Get all available actors at this level (ignoring guessed list)
-            all_actors = {
-                actor.lower(): data for actor, data in questions[level].items()
-                if actor.lower() not in guessed_list  # ✅ Ensure guessed actors are removed
-            }
-
-            if not all_actors:
-                custom_log(f"⚠️ No more actors left to guess at level {level}.")
-                return jsonify({"error": f"No more actors left to guess at level {level}"}), 200
-
-            # ✅ Ensure Randomness: Shuffle list before selecting actor
-            actor = None
-            if category == "mixed":
-                actor_list = list(all_actors.keys())
-                random.shuffle(actor_list)  # ✅ Ensure randomness
-                actor = actor_list[0]  # ✅ Pick the first shuffled actor
+            # ✅ Filter available names for the requested category
+            level_data = names_data[level]
+            if category != "mixed":
+                available_names = level_data.get(category, [])
+                custom_log(f"✅ Available names for category '{category}' at level {level}: {available_names}")
             else:
-                filtered_actors = {
-                    actor: data for actor, data in all_actors.items()
-                    if category in [c.lower() for c in data.get("categories", [])]
-                }
-                if not filtered_actors:
-                    custom_log(f"⚠️ No more actors left to guess in category '{category}' at level {level}.")
-                    return jsonify({"error": f"No more actors left to guess in category '{category}' at level {level}"}), 200
-                filtered_actor_list = list(filtered_actors.keys())
-                random.shuffle(filtered_actor_list)
-                actor = filtered_actor_list[0]
+                available_names = [name for cat_list in level_data.values() for name in cat_list]  # Flatten all categories
+                custom_log(f"✅ Available names for 'mixed' category at level {level}: {available_names}")
 
-            question_data = all_actors[actor]
-            actor_category = question_data.get("categories", [])[0].lower()  # Pick the first category and lowercase it
+            # ✅ Remove already guessed names
+            available_names = [name for name in available_names if name not in guessed_list]
 
-            # ✅ Get distractor names (3 random actors from the same category)
-            distractor_pool = [
-                a for a, data in all_actors.items()
-                if actor_category in [c.lower() for c in data.get("categories", [])] and a != actor
-            ]
-            random.shuffle(distractor_pool)  # ✅ Shuffle before selecting
-            distractor_names = distractor_pool[:3]  # ✅ Get up to 3 distractors
+            if not available_names:
+                custom_log(f"⚠️ No more names left to guess in category '{category}' at level {level}.")
+                return jsonify({"error": f"No more names left to guess in category '{category}' at level {level}"}), 200
 
-            # ✅ Get distractor images
-            distractor_images = []
-            for name in distractor_names:
-                formatted_name = self.normalize_name(name)
-                distractor_image = None
+            # ✅ Randomly select a main celebrity
+            random.shuffle(available_names)
+            selected_name = available_names[0]
+            custom_log(f"🎭 Selected name: {selected_name}")
 
-                for filename in os.listdir(IMAGE_DIR):
-                    if filename.lower().startswith(formatted_name.lower()):  # ✅ Case-insensitive file matching
-                        distractor_image = f"{request.host_url.rstrip('/')}/images/{filename}"
-                        break
+            # ✅ Load full celeb data YAML to get the selected name's facts
+            celeb_data = self.load_yaml(DATA_YAML_PATH)
+            if not celeb_data or level not in celeb_data or selected_name not in celeb_data[level]:
+                custom_log(f"❌ Could not find details for {selected_name} in `celeb_data.yml`.")
+                return jsonify({"error": f"Data for {selected_name} not found"}), 500
 
-                # ✅ If no image found, use a default image
-                distractor_images.append(distractor_image or f"{request.host_url.rstrip('/')}/images/default.jpg")
+            # ✅ Retrieve details for selected celebrity
+            selected_data = celeb_data[level][selected_name]
+            selected_facts = selected_data.get("facts", [])
 
-            # ✅ Get correct actor's image
-            formatted_actor_name = self.normalize_name(actor)
-            image_url = None
-            for filename in os.listdir(IMAGE_DIR):
-                if filename.lower().startswith(formatted_actor_name.lower()):  # ✅ Case-insensitive file matching
-                    image_url = f"{request.host_url.rstrip('/')}/images/{filename}"
-                    break
-            image_url = image_url or f"{request.host_url.rstrip('/')}/images/default.jpg"
+            # ✅ Select 3 random facts (if available)
+            if len(selected_facts) > 3:
+                selected_facts = random.sample(selected_facts, 3)
 
-            # ✅ Final response
-            # ✅ Preserve "mixed" category if it was requested
+            custom_log(f"📜 Selected 3 Random Facts: {selected_facts}")
+
+            selected_categories = selected_data.get("categories", [])
+
+            if not selected_categories:
+                custom_log(f"❌ No category found for {selected_name} in `celeb_data.yml`.")
+                return jsonify({"error": f"No category found for {selected_name}"}), 500
+
+            selected_category = selected_categories[0].lower()  # ✅ Use the first category
+
+            # ✅ Select distractor names from the same category
+            all_category_names = level_data.get(selected_category, [])
+            distractor_names = [name for name in all_category_names if name != selected_name]
+
+            random.shuffle(distractor_names)
+            distractor_names = distractor_names[:3]  # ✅ Pick up to 3 distractors
+
+            # ✅ If not enough distractors, fill from other categories
+            if len(distractor_names) < 3:
+                additional_names = [name for name in available_names if name not in distractor_names and name != selected_name]
+                random.shuffle(additional_names)
+                distractor_names.extend(additional_names[:3 - len(distractor_names)])
+
+            custom_log(f"🎭 Final Distractor Names: {distractor_names}")
+
+            # ✅ Get images for selected celebrity and distractors
+            image_url = self.get_image_url(selected_name)
+            distractor_images = [self.get_image_url(name) for name in distractor_names]
+
+            # ✅ Construct response
             response = {
-                "actor": actor,
-                "category": "mixed" if category == "mixed" else actor_category,  # ✅ FIXED: Force "mixed" if playing mixed
-                "facts": question_data["facts"],
+                "actor": selected_name,
+                "category": selected_category,
+                "facts": selected_facts,
                 "level": level,
                 "image_url": image_url,
                 "distractor_images": distractor_images,
                 "distractor_names": distractor_names
             }
-
 
             custom_log(f"✅ Sending response: {response}")
             return jsonify(response), 200
@@ -192,3 +168,12 @@ class QuestionModule:
         except Exception as e:
             custom_log(f"❌ Unexpected error in get_question: {e}")
             return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+    def get_image_url(self, name):
+        """Retrieve the image URL for a given name from the images directory."""
+        formatted_name = self.normalize_name(name)
+        for filename in os.listdir(IMAGE_DIR):
+            if filename.lower().startswith(formatted_name.lower()):  # ✅ Case-insensitive file matching
+                return f"{request.host_url.rstrip('/')}/images/{filename}"
+
+        return f"{request.host_url.rstrip('/')}/images/default.jpg"

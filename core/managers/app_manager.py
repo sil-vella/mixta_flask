@@ -34,12 +34,6 @@ class AppManager:
         # Initialize services
         self.services_manager.initialize_services()
 
-        custom_log(f"POSTGRES_USER: {os.getenv('POSTGRES_USER')}")
-        custom_log(f"POSTGRES_PASSWORD: {os.getenv('POSTGRES_PASSWORD')}")
-        custom_log(f"POSTGRES_DB: {os.getenv('POSTGRES_DB')}")
-        custom_log(f"DB_HOST: {os.getenv('DB_HOST')}")
-
-
 
         # Register and initialize plugins
         custom_log("Initializing plugins...")
