@@ -22,7 +22,13 @@ class LoginModule:
     def get_connection_module(self):
         """Retrieve ConnectionModule from ModuleManager."""
         module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
-        return module_manager.get_module("connection_module")
+        connection_module = module_manager.get_module("connection_module")
+
+        if not connection_module:
+            custom_log("❌ ConnectionModule not found in ModuleManager.")
+        
+        return connection_module
+
 
     def register_routes(self):
         """Register authentication routes."""
@@ -31,7 +37,28 @@ class LoginModule:
 
         self.connection_module.register_route('/register', self.register_user, methods=['POST'])
         self.connection_module.register_route('/login', self.login_user, methods=['POST'])
+        self.connection_module.register_route('/delete-user', self.delete_user_request, methods=['POST'])  # ✅ Register route
+
         custom_log("🌐 LoginModule: Authentication routes registered successfully.")
+
+    def delete_user_request(self):
+        """API Endpoint to delete a user and their data."""
+        try:
+            data = request.get_json()
+            user_id = data.get("user_id")
+
+            if not user_id:
+                return jsonify({"error": "User ID is required"}), 400
+
+            # ✅ Call the proper delete method
+            response, status_code = self.delete_user_data(user_id)
+            return jsonify(response), status_code
+
+        except Exception as e:
+            custom_log(f"❌ Error in delete-user API: {e}")
+            return jsonify({"error": "Server error"}), 500
+
+
 
     def hash_password(self, password):
         """Hash the password using bcrypt."""
@@ -173,6 +200,9 @@ class LoginModule:
             category_progress = self._get_category_progress(user_id)
             guessed_names = self._get_guessed_names(user_id)
 
+            custom_log(f"❌ category prog {category_progress}")
+
+
             token = jwt.encode({"user_id": user_id, "exp": datetime.utcnow() + timedelta(hours=24)}, self.SECRET_KEY, algorithm="HS256")
 
             return jsonify({"message": "Login successful", "user": {"id": user_id, "username": user[0]["username"], "category_progress": category_progress, "guessed_names": guessed_names}, "token": token}), 200
@@ -211,3 +241,28 @@ class LoginModule:
         except Exception as e:
             custom_log(f"❌ Error fetching guessed names: {e}")
             return {}
+
+    def delete_user_data(self, user_id):
+        """Delete all data associated with a user before removing them from the database."""
+        try:
+            if not self.connection_module:
+                return {"error": "Database connection is unavailable"}, 500
+
+            # ✅ Delete guessed names
+            custom_log(f"🗑️ Deleting guessed names for User ID {user_id}...")
+            self.connection_module.execute_query("DELETE FROM guessed_names WHERE user_id = %s", (user_id,))
+
+            # ✅ Delete user progress
+            custom_log(f"🗑️ Deleting category progress for User ID {user_id}...")
+            self.connection_module.execute_query("DELETE FROM user_category_progress WHERE user_id = %s", (user_id,))
+
+            # ✅ Finally, delete the user
+            custom_log(f"🗑️ Deleting User ID {user_id} from users table...")
+            self.connection_module.execute_query("DELETE FROM users WHERE id = %s", (user_id,))
+
+            custom_log(f"✅ Successfully deleted all data for User ID {user_id}.")
+            return {"message": f"User ID {user_id} and all associated data deleted successfully"}, 200
+
+        except Exception as e:
+            custom_log(f"❌ Error deleting user data: {e}")
+            return {"error": f"Failed to delete user data: {str(e)}"}, 500

@@ -1,14 +1,16 @@
 from flask import request, jsonify
 from tools.logger.custom_logging import custom_log
 from core.managers.module_manager import ModuleManager
-from plugins.game_plugin.modules.question_module.question_module import NAMES_YAML_PATH  # ✅ Import it directly
 
 class RewardsModule:
     def __init__(self, app_manager=None):
         """Initialize RewardsModule and retrieve necessary modules."""
         self.app_manager = app_manager
+        self.module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()  # ✅ Store once
+
         self.connection_module = self.get_connection_module()
-        self.question_module = self.get_question_module()  # ✅ Get QuestionModule
+        self.question_module = self.get_question_module()
+
 
         if not self.connection_module:
             raise RuntimeError("RewardsModule: Failed to retrieve ConnectionModule from ModuleManager.")
@@ -20,37 +22,62 @@ class RewardsModule:
 
     def get_connection_module(self):
         """Retrieve ConnectionModule from ModuleManager."""
-        module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
-        return module_manager.get_module("connection_module")
+        return self.module_manager.get_module("connection_module")
 
     def get_question_module(self):
         """Retrieve QuestionModule from ModuleManager."""
-        module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
-        return module_manager.get_module("question_module")  # ✅ Ensure module name matches
+        return self.module_manager.get_module("question_module")
 
     def _get_names_from_yaml(self, category, level):
         """Retrieve all names for a category and level from YAML using QuestionModule."""
+        
+        custom_log(f"🔍 [_get_names_from_yaml] Start: category={category}, level={level}")
+
         if not self.question_module:
-            custom_log("❌ QuestionModule is not available.")
+            custom_log("❌ [_get_names_from_yaml] QuestionModule instance is not available.")
             return []
 
-        # ✅ Ensure the path exists inside QuestionModule
-        if not hasattr(self.question_module, "NAMES_YAML_PATH"):
-            custom_log("❌ QuestionModule does not have NAMES_YAML_PATH defined.")
+        # ✅ Fetch NAMES_YAML_PATH dynamically
+        names_yaml_path = getattr(self.question_module, "NAMES_YAML_PATH", None)
+        custom_log(f"🗂️ [_get_names_from_yaml] Retrieved NAMES_YAML_PATH: {names_yaml_path}")
+
+        if not names_yaml_path:
+            custom_log("❌ [_get_names_from_yaml] QuestionModule does not have a valid NAMES_YAML_PATH.")
             return []
 
-        questions = self.question_module.load_yaml(self.question_module.NAMES_YAML_PATH)
+        # ✅ Load YAML data
+        try:
+            questions = self.question_module.load_yaml(names_yaml_path)
+            custom_log(f"📄 [_get_names_from_yaml] YAML loaded successfully. Keys found: {list(questions.keys())}")
+        except Exception as e:
+            custom_log(f"❌ [_get_names_from_yaml] Failed to load YAML. Error: {str(e)}")
+            return []
 
         if not questions or str(level) not in questions:
+            custom_log(f"⚠️ [_get_names_from_yaml] No data found for level {level}. Available levels: {list(questions.keys())}")
             return []
 
-        all_names = [
-            actor.lower() for actor, data in questions[str(level)].items()
-            if category in [c.lower() for c in data.get("categories", [])]
-        ]
+        # ✅ Log structure of level
+        level_data = questions[str(level)]
+        custom_log(f"🧐 [_get_names_from_yaml] Data for level {level}: {level_data}")
 
-        return all_names
+        # ✅ Fix for category-based lists
+        try:
+            if isinstance(level_data, dict):  # Check if structure is correct
+                if category in level_data and isinstance(level_data[category], list):
+                    all_names = [name.lower() for name in level_data[category]]
+                    custom_log(f"✅ [_get_names_from_yaml] Retrieved {len(all_names)} names for category '{category}' at level {level}. Names: {all_names}")
+                    return all_names
+                else:
+                    custom_log(f"⚠️ [_get_names_from_yaml] Category '{category}' not found at level {level}. Available categories: {list(level_data.keys())}")
+            else:
+                custom_log(f"⚠️ [_get_names_from_yaml] Unexpected data format for level {level}. Expected dict but got {type(level_data)}.")
 
+        except Exception as e:
+            custom_log(f"❌ [_get_names_from_yaml] Error processing names: {str(e)}")
+            return []
+
+        return []
 
     def register_routes(self):
         """Register rewards route."""
@@ -69,94 +96,88 @@ class RewardsModule:
         category = data.get("category")
         level = data.get("level")
         new_points = data.get("points")
-        guessed_names = data.get("guessed_names", [])  # ✅ List of guessed names
+        guessed_names = data.get("guessed_names", [])  # ✅ Updated guessed list
+        email = data.get("email")
+        username = data.get("username")
 
-        if not user_id or not category or level is None or new_points is None:
-            custom_log("❌ [update_rewards] Missing required fields.")
-            return jsonify({"error": "Missing required fields"}), 400
-
-        # ✅ Get FunctionHelperModule
-        custom_log("🔍 Fetching FunctionHelperModule...")
-        module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
-        function_helper_module = module_manager.get_module("function_helper_module")
-
-        if not function_helper_module:
-            custom_log("❌ [update_rewards] FunctionHelperModule not available.")
-            return jsonify({"error": "FunctionHelperModule not available"}), 500
-
-        # ✅ Load categories data and log the max level
-        category_data = function_helper_module._load_categories_data()
-        max_level = int(category_data.get(category, {}).get("levels", 1))
-
-        custom_log(f"📊 Loaded category data for '{category}': {category_data.get(category)} | Max Level: {max_level}")
+        custom_log(f"📜 Updated guessed names received: {guessed_names}")
 
         # ✅ Fetch all available names for this level from YAML
         all_names_at_level = self._get_names_from_yaml(category, level)
-        custom_log(f"📜 All possible names for '{category}' Level {level}: {all_names_at_level}")
+        custom_log(f"📜 Total names to guess for '{category}' Level {level}: {all_names_at_level}")
 
-        # ✅ Fetch already guessed names from database
-        db_guessed_names_query = """
-        SELECT guessed_name FROM guessed_names WHERE user_id = %s AND category = %s AND level = %s
-        """
-        custom_log(f"📡 Fetching guessed names from DB for User {user_id} in Category '{category}' Level {level}...")
-        db_guessed_names = self.connection_module.fetch_from_db(db_guessed_names_query, (user_id, category, level))
-        db_guessed_names = [row[0] for row in db_guessed_names] if db_guessed_names else []
+        # ✅ Find missing names
+        missing_names = set(all_names_at_level) - set(guessed_names)
+        custom_log(f"🔍 Missing names to guess: {missing_names}")
 
+        # ✅ Validate necessary user details before updating
+        if all([user_id, email, username]):
+            custom_log(f"🔄 User {user_id} sent full details. Proceeding with database update...")
 
-        # ✅ Merge new guessed names with existing ones
-        all_guessed = set(db_guessed_names + guessed_names)
-        custom_log(f"📌 User {user_id} guessed so far in {category} Level {level}: {all_guessed}")
+            # ✅ Get FunctionHelperModule
+            custom_log("🔍 Fetching FunctionHelperModule...")
+            module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
+            function_helper_module = module_manager.get_module("function_helper_module")
 
-        # ✅ Fetch current progress
-        progress_query = """
-        SELECT points FROM user_category_progress WHERE user_id = %s AND category = %s AND level = %s
-        """
-        custom_log(f"📡 Fetching current progress from DB for User {user_id} in Category '{category}' Level {level}...")
-        progress_data = self.connection_module.fetch_from_db(progress_query, (user_id, category, level), as_dict=True)
-        current_points = progress_data[0]["points"] if progress_data else 0
+            if not function_helper_module:
+                custom_log("❌ [update_rewards] FunctionHelperModule not available.")
+                return jsonify({"error": "FunctionHelperModule not available"}), 500
 
-        # ✅ Only update if new points are greater
-        if new_points > current_points:
-            if progress_data:
-                update_query = """
-                UPDATE user_category_progress SET points = %s WHERE user_id = %s AND category = %s AND level = %s
-                """
-                self.connection_module.execute_query(update_query, (new_points, user_id, category, level))
-                custom_log(f"🔄 Updated points for user {user_id} in {category} Level {level}: {new_points}")
-            else:
-                insert_query = """
-                INSERT INTO user_category_progress (user_id, category, level, points) VALUES (%s, %s, %s, %s)
-                """
-                self.connection_module.execute_query(insert_query, (user_id, category, level, new_points))
-                custom_log(f"✅ Inserted new progress for user {user_id} in {category} Level {level}: {new_points}")
+            # ✅ Load category data to get max level
+            category_data = function_helper_module._load_categories_data()
+            max_level = int(category_data.get(category, {}).get("levels", 1))
+            custom_log(f"📊 Loaded category data for '{category}' | Max Level: {max_level}")
 
-        # ✅ Process guessed names
-        if guessed_names:
-            custom_log(f"📜 New guessed names for user {user_id} in {category} Level {level}: {guessed_names}")
+            # ✅ Fetch current progress
+            progress_query = """
+            SELECT points FROM user_category_progress WHERE user_id = %s AND category = %s AND level = %s
+            """
+            progress_data = self.connection_module.fetch_from_db(progress_query, (user_id, category, level), as_dict=True)
+            current_points = progress_data[0]["points"] if progress_data else 0
 
-            for guessed_name in guessed_names:
-                if guessed_name not in db_guessed_names:
-                    insert_query = """
-                    INSERT INTO guessed_names (user_id, category, level, guessed_name) VALUES (%s, %s, %s, %s)
+            # ✅ Only update if new points are greater
+            if new_points > current_points:
+                if progress_data:
+                    update_query = """
+                    UPDATE user_category_progress SET points = %s WHERE user_id = %s AND category = %s AND level = %s
                     """
+                    self.connection_module.execute_query(update_query, (new_points, user_id, category, level))
+                    custom_log(f"🔄 Updated points for user {user_id} in {category} Level {level}: {new_points}")
+                else:
+                    insert_query = """
+                    INSERT INTO user_category_progress (user_id, category, level, points) VALUES (%s, %s, %s, %s)
+                    """
+                    self.connection_module.execute_query(insert_query, (user_id, category, level, new_points))
+                    custom_log(f"✅ Inserted new progress for user {user_id} in {category} Level {level}: {new_points}")
+
+            # ✅ Insert new guessed names directly
+            if guessed_names:
+                custom_log(f"📜 Saving guessed names for user {user_id} in {category} Level {level}: {guessed_names}")
+
+                for guessed_name in guessed_names:
+                    insert_query = """
+                    INSERT IGNORE INTO guessed_names (user_id, category, level, guessed_name) VALUES (%s, %s, %s, %s)
+                    """  # ✅ Prevent duplicate inserts
                     self.connection_module.execute_query(insert_query, (user_id, category, level, guessed_name))
                     custom_log(f"✅ Added guessed name '{guessed_name}' for user {user_id} in {category} Level {level}.")
+
+        else:
+            custom_log(f"⚠️ User did not send complete details (ID, email, username). Skipping database update...")
 
         # ✅ Determine if we should level up or end the game
         level_up = False
         end_game = False
 
-        if len(all_guessed) >= len(all_names_at_level):  # ✅ Level up only if all names are guessed
+        if not missing_names:  # ✅ Level up only if all names are guessed
             if level < max_level:
                 level_up = True
-                custom_log(f"🎯 User {user_id} leveled up in {category} to Level {level + 1}")
+                custom_log(f"🎯 User has guessed all names! Leveling up to Level {level + 1}")
             else:
                 end_game = True
-                custom_log(f"🏆 User {user_id} reached max level in {category}. Game Over.")
+                custom_log(f"🏆 User reached max level in {category}. Game Over.")
 
         response = {
             "message": "Rewards updated successfully",
-            "updated_points": max(new_points, current_points),
             "levelUp": level_up,
             "endGame": end_game
         }

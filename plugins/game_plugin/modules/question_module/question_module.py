@@ -6,21 +6,15 @@ from flask import request, jsonify, send_from_directory
 from tools.logger.custom_logging import custom_log
 from core.managers.module_manager import ModuleManager
 
-# ✅ Get the directory of the current file
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# ✅ Dynamically set IMAGE_DIR relative to this file's location
-IMAGE_DIR = os.path.join(BASE_DIR, "celeb_data", "images")
-
-# Define paths for YAML files
-NAMES_YAML_PATH = os.path.join(BASE_DIR, "celeb_data", "categoriesed_celeb_names_for_db_populate.yml")
-DATA_YAML_PATH = os.path.join(BASE_DIR, "celeb_data", "celeb_data.yml")
-
 class QuestionModule:
     def __init__(self, app_manager=None):
         """Initialize QuestionModule and register routes."""
         self.app_manager = app_manager
         self.connection_module = self.get_connection_module()
+        self.BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.IMAGE_DIR = os.path.join(self.BASE_DIR, "celeb_data", "images")
+        self.NAMES_YAML_PATH = os.path.join(self.BASE_DIR, "celeb_data", "categoriesed_celeb_names_for_db_populate.yml")
+        self.DATA_YAML_PATH = os.path.join(self.BASE_DIR, "celeb_data", "celeb_data.yml")
 
         if not self.connection_module:
             raise RuntimeError("QuestionModule: Failed to retrieve ConnectionModule from ModuleManager.")
@@ -48,7 +42,7 @@ class QuestionModule:
         # ✅ Register the static image serving route
         def serve_image(filename):
             """Serves images from the /images/ directory."""
-            return send_from_directory(IMAGE_DIR, filename)
+            return send_from_directory(self.IMAGE_DIR, filename)
 
         self.connection_module.register_route('/images/<path:filename>', serve_image, methods=['GET'])
         custom_log("🖼️ QuestionModule: `/images/<filename>` route registered to serve static images.")
@@ -82,7 +76,7 @@ class QuestionModule:
             custom_log(f"📥 Received request for category '{category}' at level {level}. Guessed list: {guessed_list}")
 
             # ✅ Load names YAML
-            names_data = self.load_yaml(NAMES_YAML_PATH)
+            names_data = self.load_yaml(self.NAMES_YAML_PATH)
             if not names_data or level not in names_data:
                 custom_log(f"❌ No data found for level {level}.")
                 return jsonify({"error": f"No data available for level {level}"}), 404
@@ -98,6 +92,7 @@ class QuestionModule:
 
             # ✅ Remove already guessed names
             available_names = [name for name in available_names if name not in guessed_list]
+            custom_log(f"✅ Available names after guessed list filter for category '{category}' at level {level}: {available_names}")
 
             if not available_names:
                 custom_log(f"⚠️ No more names left to guess in category '{category}' at level {level}.")
@@ -109,7 +104,7 @@ class QuestionModule:
             custom_log(f"🎭 Selected name: {selected_name}")
 
             # ✅ Load full celeb data YAML to get the selected name's facts
-            celeb_data = self.load_yaml(DATA_YAML_PATH)
+            celeb_data = self.load_yaml(self.DATA_YAML_PATH)
             if not celeb_data or level not in celeb_data or selected_name not in celeb_data[level]:
                 custom_log(f"❌ Could not find details for {selected_name} in `celeb_data.yml`.")
                 return jsonify({"error": f"Data for {selected_name} not found"}), 500
@@ -172,7 +167,7 @@ class QuestionModule:
     def get_image_url(self, name):
         """Retrieve the image URL for a given name from the images directory."""
         formatted_name = self.normalize_name(name)
-        for filename in os.listdir(IMAGE_DIR):
+        for filename in os.listdir(self.IMAGE_DIR):
             if filename.lower().startswith(formatted_name.lower()):  # ✅ Case-insensitive file matching
                 return f"{request.host_url.rstrip('/')}/images/{filename}"
 
