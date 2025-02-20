@@ -84,11 +84,13 @@ class ConnectionMySqlModule:
             username VARCHAR(50) UNIQUE NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
             password TEXT NOT NULL,
+            total_points INT DEFAULT 0,  -- ✅ New column for total points
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
         self.execute_query(query)
         custom_log("✅ Users table verified.")
+
 
     def _create_user_category_progress_table(self):
         """Create table to track user levels and points per category and level."""
@@ -143,14 +145,24 @@ class ConnectionMySqlModule:
         return [row['guessed_name'] for row in results] if results else []
 
     def update_user_progress(self, user_id, category, level, points):
-        """Update user points and level for a specific category."""
+        """Update user points and level for a specific category, and update total points."""
         query = """
         INSERT INTO user_category_progress (user_id, category, level, points)
         VALUES (%s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE points = points + %s;
         """
         self.execute_query(query, (user_id, category, level, points, points))
+
+        # ✅ Update total points in users table
+        total_query = """
+        UPDATE users
+        SET total_points = (SELECT COALESCE(SUM(points), 0) FROM user_category_progress WHERE user_id = %s)
+        WHERE id = %s;
+        """
+        self.execute_query(total_query, (user_id, user_id))
+
         custom_log(f"✅ Updated progress: User {user_id} | {category} Level {level} | +{points} points")
+
 
     def get_user_progress(self, user_id, category, level):
         """Retrieve user points and level for a specific category."""
@@ -181,8 +193,8 @@ class ConnectionMySqlModule:
     def get_all_user_data(self, user_id):
         """Retrieve all user data including profile, category progress, and guessed names."""
         try:
-            # ✅ Fetch user details
-            user_query = "SELECT id, username, email, created_at FROM users WHERE id = %s"
+            # ✅ Fetch user details, including total_points
+            user_query = "SELECT id, username, email, total_points, created_at FROM users WHERE id = %s"
             user_data = self.fetch_from_db(user_query, (user_id,), as_dict=True)
 
             if not user_data:
@@ -225,11 +237,12 @@ class ConnectionMySqlModule:
                 
                 guessed_names[category][level].append(guessed_name)
 
-            # ✅ Construct final response
+            # ✅ Include total_points in response
             user_response = {
                 "user_info": user_info,
                 "category_progress": category_progress,
-                "guessed_names": guessed_names
+                "guessed_names": guessed_names,
+                "total_points": user_info["total_points"]  # ✅ Include total points
             }
 
             return user_response, 200

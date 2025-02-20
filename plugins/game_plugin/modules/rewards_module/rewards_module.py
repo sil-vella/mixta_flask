@@ -99,6 +99,7 @@ class RewardsModule:
         guessed_names = data.get("guessed_names", [])  # ✅ Updated guessed list
         email = data.get("email")
         username = data.get("username")
+        total_points = data.get("total_points")
 
         custom_log(f"📜 Updated guessed names received: {guessed_names}")
 

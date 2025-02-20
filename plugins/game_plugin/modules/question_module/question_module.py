@@ -90,18 +90,20 @@ class QuestionModule:
                 available_names = [name for cat_list in level_data.values() for name in cat_list]  # Flatten all categories
                 custom_log(f"✅ Available names for 'mixed' category at level {level}: {available_names}")
 
-            # ✅ Remove already guessed names
+            # ✅ Remove already guessed names first
             available_names = [name for name in available_names if name not in guessed_list]
-            custom_log(f"✅ Available names after guessed list filter for category '{category}' at level {level}: {available_names}")
+
+            # ✅ Shuffle AFTER filtering guessed names
+            random.shuffle(available_names)  
 
             if not available_names:
                 custom_log(f"⚠️ No more names left to guess in category '{category}' at level {level}.")
                 return jsonify({"error": f"No more names left to guess in category '{category}' at level {level}"}), 200
 
             # ✅ Randomly select a main celebrity
-            random.shuffle(available_names)
             selected_name = available_names[0]
             custom_log(f"🎭 Selected name: {selected_name}")
+
 
             # ✅ Load full celeb data YAML to get the selected name's facts
             celeb_data = self.load_yaml(self.DATA_YAML_PATH)
@@ -131,8 +133,9 @@ class QuestionModule:
             all_category_names = level_data.get(selected_category, [])
             distractor_names = [name for name in all_category_names if name != selected_name]
 
+            # ✅ Shuffle distractors properly
             random.shuffle(distractor_names)
-            distractor_names = distractor_names[:3]  # ✅ Pick up to 3 distractors
+            distractor_names = distractor_names[:3]  # Pick up to 3 distractors
 
             # ✅ If not enough distractors, fill from other categories
             if len(distractor_names) < 3:
@@ -141,6 +144,7 @@ class QuestionModule:
                 distractor_names.extend(additional_names[:3 - len(distractor_names)])
 
             custom_log(f"🎭 Final Distractor Names: {distractor_names}")
+
 
             # ✅ Get images for selected celebrity and distractors
             image_url = self.get_image_url(selected_name)

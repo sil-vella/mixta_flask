@@ -28,44 +28,41 @@ class LeaderboardModule:
         custom_log("🌐 LeaderboardModule: `/get-leaderboard` route registered.")
 
     def get_leaderboard(self):
-        """Fetch all users, sort by points (descending), and return leaderboard with user rank (if provided)."""
+        """Retrieve the leaderboard with user rankings and return the current user's position if an email is provided."""
         try:
-            # ✅ Get email from query params
+            connection = self.connection_module.get_connection()
+
+            # ✅ Retrieve leaderboard (Top 10 users ordered by total points)
+            leaderboard_query = """
+            SELECT username, total_points AS points FROM users
+            ORDER BY total_points DESC
+            LIMIT 10;
+            """
+            leaderboard_data = self.connection_module.fetch_from_db(leaderboard_query, as_dict=True)
+
+            # ✅ Get current user's rank if email is provided
             user_email = request.args.get("email")
-            
-            # ✅ Fetch all users ordered by points DESC
-            query = "SELECT username, email, points FROM users ORDER BY points DESC;"
-            users = self.connection_module.fetch_from_db(query, as_dict=True)
+            user_rank = None
 
-            if users is None:
-                return jsonify({"error": "Failed to retrieve leaderboard."}), 500
+            if user_email:
+                user_rank_query = """
+                SELECT username, total_points AS points,
+                    (SELECT COUNT(*) + 1 FROM users WHERE total_points > u.total_points) AS rank
+                FROM users u
+                WHERE email = %s;
+                """
+                user_rank_data = self.connection_module.fetch_from_db(user_rank_query, (user_email,), as_dict=True)
 
-            leaderboard = []
-            user_rank = None  # Store user rank if email is provided
+                if user_rank_data:
+                    user_rank = user_rank_data[0]
 
-            for idx, user in enumerate(users, start=1):
-                leaderboard.append({
-                    "rank": idx,
-                    "username": user["username"],
-                    "points": user["points"]
-                })
+            response = {
+                "leaderboard": leaderboard_data,
+                "user_rank": user_rank  # ✅ Include user rank if available
+            }
 
-                # ✅ If user email is provided, check and store the rank
-                if user_email and user["email"] == user_email:
-                    user_rank = {
-                        "rank": idx,
-                        "username": user["username"],
-                        "points": user["points"]
-                    }
-
-            response_data = {"leaderboard": leaderboard}
-
-            # ✅ Include user rank in response if found
-            if user_email and user_rank:
-                response_data["user_rank"] = user_rank
-
-            return jsonify(response_data), 200
+            return jsonify(response), 200
 
         except Exception as e:
-            custom_log(f"❌ Error fetching leaderboard: {e}")
-            return jsonify({"error": "An error occurred while retrieving leaderboard."}), 500
+            custom_log(f"❌ Error retrieving leaderboard: {e}")
+            return jsonify({"error": "Server error retrieving leaderboard"}), 500
