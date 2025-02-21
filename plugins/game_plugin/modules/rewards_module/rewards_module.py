@@ -99,7 +99,7 @@ class RewardsModule:
         guessed_names = data.get("guessed_names", [])  # ✅ Updated guessed list
         email = data.get("email")
         username = data.get("username")
-        total_points = data.get("total_points")
+        total_points = data.get("total_points")  # ✅ Get total points from frontend
 
         custom_log(f"📜 Updated guessed names received: {guessed_names}")
 
@@ -161,6 +161,17 @@ class RewardsModule:
                     """  # ✅ Prevent duplicate inserts
                     self.connection_module.execute_query(insert_query, (user_id, category, level, guessed_name))
                     custom_log(f"✅ Added guessed name '{guessed_name}' for user {user_id} in {category} Level {level}.")
+
+            # ✅ Update user's total points in the `users` table
+            if total_points is not None:
+                custom_log(f"🔄 Updating total points for user {user_id}: {total_points}")
+
+                update_total_points_query = """
+                UPDATE users SET total_points = %s WHERE id = %s
+                """
+                self.connection_module.execute_query(update_total_points_query, (total_points, user_id))
+
+                custom_log(f"✅ Total points updated for user {user_id}: {total_points}")
 
         else:
             custom_log(f"⚠️ User did not send complete details (ID, email, username). Skipping database update...")

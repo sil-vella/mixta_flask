@@ -84,7 +84,7 @@ class ConnectionMySqlModule:
             username VARCHAR(50) UNIQUE NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            total_points INT DEFAULT 0,  -- ✅ New column for total points
+            total_points INT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
