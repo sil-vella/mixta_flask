@@ -140,48 +140,45 @@ class LoginModule:
 
 
     def register_user(self):
-        """Handles user registration with category-based progress & guessed names."""
+        """Registers a user if the username is available."""
         try:
             data = request.get_json()
             username = data.get("username")
-            email = data.get("email")
-            password = data.get("password")
-            category_progress = data.get("category_progress", {})
-            guessed_names = data.get("guessed_names", {})
 
-            if not username or not email or not password:
-                return jsonify({"error": "Missing required fields"}), 400
+            if not username:
+                return jsonify({"error": "Username is required"}), 400
 
-            # ✅ Check if email already exists
-            query = "SELECT id FROM users WHERE email = %s;"
-            existing_user = self.connection_module.fetch_from_db(query, (email,))
+            # ✅ Check if username already exists
+            query = "SELECT id FROM users WHERE username = %s;"
+            existing_user = self.connection_module.fetch_from_db(query, (username,))
+
             if existing_user:
-                return jsonify({"error": "Email is already registered"}), 400
+                return jsonify({"error": "Username is already taken"}), 400
 
-            # ✅ Insert new user
-            hashed_password = self.hash_password(password)
-            insert_user_query = "INSERT INTO users (username, email, password) VALUES (%s, %s, %s);"
-            self.connection_module.execute_query(insert_user_query, (username, email, hashed_password))
+            # ✅ Insert new user with username only
+            insert_query = "INSERT INTO users (username) VALUES (%s);"
+            self.connection_module.execute_query(insert_query, (username,))
 
-            user_id_query = "SELECT id FROM users WHERE email = %s;"
-            user_result = self.connection_module.fetch_from_db(user_id_query, (email,))
+            # ✅ Fetch user ID of newly created user
+            user_id_query = "SELECT id FROM users WHERE username = %s;"
+            user_result = self.connection_module.fetch_from_db(user_id_query, (username,), as_dict=True)
 
             if not user_result:
-                return jsonify({"error": "User registration failed. No user found after insert."}), 500
+                return jsonify({"error": "User registration failed."}), 500
 
-            # ✅ Fix: Use index instead of dictionary key if needed
-            user_id = user_result[0][0] if isinstance(user_result[0], tuple) else user_result[0]["id"]
+            user_id = user_result[0]["id"]
 
-
-            # ✅ Save category progress & guessed names
-            self._save_category_progress(user_id, category_progress)
-            self._save_guessed_names(user_id, guessed_names)
-
-            return jsonify({"message": "User registered successfully"}), 200
+            return jsonify({
+                "message": "User registered successfully",
+                "user_id": user_id,
+                "username": username
+            }), 200
 
         except Exception as e:
             custom_log(f"❌ Error registering user: {e}")
-            return jsonify({"error": f"Server error: {str(e)}"}), 500
+            return jsonify({"error": "Server error"}), 500
+
+
 
     def login_user(self):
         """Handles user login and retrieves category-based progress & guessed names."""

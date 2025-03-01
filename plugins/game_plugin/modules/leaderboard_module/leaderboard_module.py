@@ -28,7 +28,7 @@ class LeaderboardModule:
         custom_log("🌐 LeaderboardModule: `/get-leaderboard` route registered.")
 
     def get_leaderboard(self):
-        """Retrieve the leaderboard with user rankings and return the current user's position if an email is provided."""
+        """Retrieve the leaderboard with user rankings and return the current user's position if a username is provided."""
         try:
             connection = self.connection_module.get_connection()
 
@@ -40,18 +40,18 @@ class LeaderboardModule:
             """
             leaderboard_data = self.connection_module.fetch_from_db(leaderboard_query, as_dict=True)
 
-            # ✅ Get current user's rank if email is provided
-            user_email = request.args.get("email")
+            # ✅ Get current user's rank if username is provided
+            username = request.args.get("username")
             user_rank = None
 
-            if user_email:
+            if username:
                 user_rank_query = """
                 SELECT username, total_points AS points,
                     (SELECT COUNT(*) + 1 FROM users WHERE total_points > u.total_points) AS rank
                 FROM users u
-                WHERE email = %s;
+                WHERE username = %s;
                 """
-                user_rank_data = self.connection_module.fetch_from_db(user_rank_query, (user_email,), as_dict=True)
+                user_rank_data = self.connection_module.fetch_from_db(user_rank_query, (username,), as_dict=True)
 
                 if user_rank_data:
                     user_rank = user_rank_data[0]

@@ -92,16 +92,28 @@ class RewardsModule:
         custom_log(f"📢 [update_rewards] Request received: {request.get_json()}")
 
         data = request.get_json()
-        user_id = data.get("user_id")
         category = data.get("category")
         level = data.get("level")
         new_points = data.get("points")
         guessed_names = data.get("guessed_names", [])  # ✅ Updated guessed list
-        email = data.get("email")
         username = data.get("username")
         total_points = data.get("total_points")  # ✅ Get total points from frontend
 
         custom_log(f"📜 Updated guessed names received: {guessed_names}")
+
+        if not username:
+            custom_log("❌ [update_rewards] Missing 'username' field in request.")
+            return jsonify({"error": "Username is required"}), 400
+
+        # ✅ Fetch user_id using username
+        user_query = "SELECT id FROM users WHERE username = %s;"
+        user_data = self.connection_module.fetch_from_db(user_query, (username,), as_dict=True)
+
+        if not user_data:
+            custom_log(f"❌ No user found for username: {username}")
+            return jsonify({"error": "User not found"}), 404
+
+        user_id = user_data[0]["id"]
 
         # ✅ Fetch all available names for this level from YAML
         all_names_at_level = self._get_names_from_yaml(category, level)
@@ -111,70 +123,63 @@ class RewardsModule:
         missing_names = set(all_names_at_level) - set(guessed_names)
         custom_log(f"🔍 Missing names to guess: {missing_names}")
 
-        # ✅ Validate necessary user details before updating
-        if all([user_id, email, username]):
-            custom_log(f"🔄 User {user_id} sent full details. Proceeding with database update...")
+        # ✅ Get FunctionHelperModule
+        custom_log("🔍 Fetching FunctionHelperModule...")
+        module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
+        function_helper_module = module_manager.get_module("function_helper_module")
 
-            # ✅ Get FunctionHelperModule
-            custom_log("🔍 Fetching FunctionHelperModule...")
-            module_manager = self.app_manager.module_manager if self.app_manager else ModuleManager()
-            function_helper_module = module_manager.get_module("function_helper_module")
+        if not function_helper_module:
+            custom_log("❌ [update_rewards] FunctionHelperModule not available.")
+            return jsonify({"error": "FunctionHelperModule not available"}), 500
 
-            if not function_helper_module:
-                custom_log("❌ [update_rewards] FunctionHelperModule not available.")
-                return jsonify({"error": "FunctionHelperModule not available"}), 500
+        # ✅ Load category data to get max level
+        category_data = function_helper_module._load_categories_data()
+        max_level = int(category_data.get(category, {}).get("levels", 1))
+        custom_log(f"📊 Loaded category data for '{category}' | Max Level: {max_level}")
 
-            # ✅ Load category data to get max level
-            category_data = function_helper_module._load_categories_data()
-            max_level = int(category_data.get(category, {}).get("levels", 1))
-            custom_log(f"📊 Loaded category data for '{category}' | Max Level: {max_level}")
+        # ✅ Fetch current progress
+        progress_query = """
+        SELECT points FROM user_category_progress WHERE user_id = %s AND category = %s AND level = %s
+        """
+        progress_data = self.connection_module.fetch_from_db(progress_query, (user_id, category, level), as_dict=True)
+        current_points = progress_data[0]["points"] if progress_data else 0
 
-            # ✅ Fetch current progress
-            progress_query = """
-            SELECT points FROM user_category_progress WHERE user_id = %s AND category = %s AND level = %s
-            """
-            progress_data = self.connection_module.fetch_from_db(progress_query, (user_id, category, level), as_dict=True)
-            current_points = progress_data[0]["points"] if progress_data else 0
-
-            # ✅ Only update if new points are greater
-            if new_points > current_points:
-                if progress_data:
-                    update_query = """
-                    UPDATE user_category_progress SET points = %s WHERE user_id = %s AND category = %s AND level = %s
-                    """
-                    self.connection_module.execute_query(update_query, (new_points, user_id, category, level))
-                    custom_log(f"🔄 Updated points for user {user_id} in {category} Level {level}: {new_points}")
-                else:
-                    insert_query = """
-                    INSERT INTO user_category_progress (user_id, category, level, points) VALUES (%s, %s, %s, %s)
-                    """
-                    self.connection_module.execute_query(insert_query, (user_id, category, level, new_points))
-                    custom_log(f"✅ Inserted new progress for user {user_id} in {category} Level {level}: {new_points}")
-
-            # ✅ Insert new guessed names directly
-            if guessed_names:
-                custom_log(f"📜 Saving guessed names for user {user_id} in {category} Level {level}: {guessed_names}")
-
-                for guessed_name in guessed_names:
-                    insert_query = """
-                    INSERT IGNORE INTO guessed_names (user_id, category, level, guessed_name) VALUES (%s, %s, %s, %s)
-                    """  # ✅ Prevent duplicate inserts
-                    self.connection_module.execute_query(insert_query, (user_id, category, level, guessed_name))
-                    custom_log(f"✅ Added guessed name '{guessed_name}' for user {user_id} in {category} Level {level}.")
-
-            # ✅ Update user's total points in the `users` table
-            if total_points is not None:
-                custom_log(f"🔄 Updating total points for user {user_id}: {total_points}")
-
-                update_total_points_query = """
-                UPDATE users SET total_points = %s WHERE id = %s
+        # ✅ Only update if new points are greater
+        if new_points > current_points:
+            if progress_data:
+                update_query = """
+                UPDATE user_category_progress SET points = %s WHERE user_id = %s AND category = %s AND level = %s
                 """
-                self.connection_module.execute_query(update_total_points_query, (total_points, user_id))
+                self.connection_module.execute_query(update_query, (new_points, user_id, category, level))
+                custom_log(f"🔄 Updated points for user {user_id} in {category} Level {level}: {new_points}")
+            else:
+                insert_query = """
+                INSERT INTO user_category_progress (user_id, category, level, points) VALUES (%s, %s, %s, %s)
+                """
+                self.connection_module.execute_query(insert_query, (user_id, category, level, new_points))
+                custom_log(f"✅ Inserted new progress for user {user_id} in {category} Level {level}: {new_points}")
 
-                custom_log(f"✅ Total points updated for user {user_id}: {total_points}")
+        # ✅ Insert new guessed names directly
+        if guessed_names:
+            custom_log(f"📜 Saving guessed names for user {user_id} in {category} Level {level}: {guessed_names}")
 
-        else:
-            custom_log(f"⚠️ User did not send complete details (ID, email, username). Skipping database update...")
+            for guessed_name in guessed_names:
+                insert_query = """
+                INSERT IGNORE INTO guessed_names (user_id, category, level, guessed_name) VALUES (%s, %s, %s, %s)
+                """  # ✅ Prevent duplicate inserts
+                self.connection_module.execute_query(insert_query, (user_id, category, level, guessed_name))
+                custom_log(f"✅ Added guessed name '{guessed_name}' for user {user_id} in {category} Level {level}.")
+
+        # ✅ Update user's total points in the `users` table
+        if total_points is not None:
+            custom_log(f"🔄 Updating total points for user {user_id}: {total_points}")
+
+            update_total_points_query = """
+            UPDATE users SET total_points = %s WHERE id = %s
+            """
+            self.connection_module.execute_query(update_total_points_query, (total_points, user_id))
+
+            custom_log(f"✅ Total points updated for user {user_id}: {total_points}")
 
         # ✅ Determine if we should level up or end the game
         level_up = False

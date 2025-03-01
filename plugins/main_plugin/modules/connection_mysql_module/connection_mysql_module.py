@@ -82,14 +82,15 @@ class ConnectionMySqlModule:
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             username VARCHAR(50) UNIQUE NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            password TEXT NOT NULL,
+            email VARCHAR(100) DEFAULT NULL,
+            password TEXT DEFAULT NULL,
             total_points INT DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         """
         self.execute_query(query)
         custom_log("✅ Users table verified.")
+
 
 
     def _create_user_category_progress_table(self):
